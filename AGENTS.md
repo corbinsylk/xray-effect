@@ -49,10 +49,10 @@ COLOUR: [#1C3A7C]
 
 ## How it should look
 
-Ten flashes in 0.8 seconds, on every second frame of a 24 fps grid, starting two frames after --start: x-ray, cyan
-negative, line drawing, x-ray on colour, cyan negative, line drawing on colour, x-ray, cyan negative, line drawing, x-ray
-on colour. The camera accelerates from the whole frame into the nose bridge and lands right after the last flash (up to
-1.5x, less if the head would leave the frame), creeps 3 % for 0.95 s, then eases back over 0.9 s.
+Six flashes, one frame on and one frame off (clips above 30 fps use a whole-number multiple, so 60 fps is two frames),
+starting two steps after --start: x-ray, cyan negative, line drawing, x-ray on colour, cyan negative, x-ray. That's about
+half a second at 24 fps. The camera accelerates from the whole frame into the nose bridge and lands right after the last
+flash (up to 1.5x, less if the head would leave the frame), creeps 3 % for 0.95 s, then eases back over 0.9 s.
 
 ## What it needs
 

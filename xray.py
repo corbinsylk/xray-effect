@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """The x-ray flicker on your own talking head clip.
 
-Ten flashes in 0.8 seconds, each a new look on the person only: an x-ray, a cyan negative or a white line drawing, on
-black or your colour. The room never changes. The camera accelerates in and lands right after the last flash, holds, then
-eases back. Everything runs on this computer: ready-made x-ray parts (parts/) are fitted to the body by MediaPipe's
+Six flashes, one frame on and one frame off, each a new look on the person only: an x-ray, a cyan negative or a white line
+drawing, on black or your colour. The room never changes. The camera accelerates in and lands right after the last flash,
+holds, then eases back. Everything runs on this computer: ready-made x-ray parts (parts/) are fitted to the body by MediaPipe's
 free tracking on every flash, so the skeleton stays on the pose and no image model or API key is needed.
 
 Run it through run.py, which sets everything up first:  python3 run.py my-clip.mp4 --start 0
@@ -15,11 +15,9 @@ import cv2, numpy as np, imageio_ffmpeg, mediapipe as mp
 from mediapipe.tasks.python import BaseOptions, vision as V
 
 # =========================== THE LOOK (defaults are the approved look; times are seconds) ============================
-RUN_FPS = 24                # the flicker is timed on a 24 fps grid at every frame rate
-FIRST_FLASH = 2             # the first flash lands on grid frame 2 after --start
-FLASH_STEP = 2              # then one flash on every second grid frame: as fast as a flicker can go
-LOOKS = ["xray", "neg", "wire", "xray_colour", "neg", "wire_colour", "xray", "neg", "wire", "xray_colour"]
-LAND = 21                   # the camera lands on grid frame 21
+FLICKER_FPS = 30            # one flicker step is one frame of the clip; clips above this rate use whole-number multiples (60 fps: 2 frames)
+FIRST_FLASH = 2             # the first flash lands on step 2 after --start
+LOOKS = ["xray", "neg", "wire", "xray_colour", "neg", "xray"]   # one flash on, one step off, for each of these
 PUNCH = 1.5                 # how far the camera goes in
 ACCEL = 2.6                 # the push accelerates: progress ** 2.6, in log space, so it hits hard at the end
 HOLD = 0.95                 # seconds held after landing, creeping 3 % so the frame is never dead
@@ -342,9 +340,8 @@ def out_curve(u):
     return (2 * f**3 - 3 * f**2 + 1) * p[i] + (f**3 - 2 * f**2 + f) * m(i) + (-2 * f**3 + 3 * f**2) * p[i + 1] + (f**3 - f**2) * m(i + 1)
 
 
-def zoom_at(t, punch):
-    """t = seconds after --start. Scale moves in log space, so equal steps read as equal zoom."""
-    t0, land = FIRST_FLASH / RUN_FPS, LAND / RUN_FPS
+def zoom_at(t, punch, t0, land):
+    """t = seconds after --start; t0 = the first flash, land = just after the last. Scale moves in log space, so equal steps read as equal zoom."""
     if t < t0:
         return 1.0
     if t < land:
@@ -388,17 +385,20 @@ def main():
     fps, rate, seconds, hdr = probe(clip)
     vf = decode_filter(rate, hdr)
     W, H = clip_size(clip, vf)
-    run = (FIRST_FLASH + FLASH_STEP * len(LOOKS)) / RUN_FPS
+    step = max(1, int(round(fps / FLICKER_FPS)))    # frames per flicker step, always a whole number so the on/off rhythm stays even
+    first_flash = FIRST_FLASH * step
+    land_at = (FIRST_FLASH + 2 * (len(LOOKS) - 1) + 1) * step
+    run = land_at / fps
     if seconds is not None and a.start + run > seconds:
         die(f"the effect needs {run:.1f} s from --start {a.start:g}, and the clip is {seconds:.1f} s long")
     print(f"Clip: {W}x{H}, {fps:.3f} fps" + (f", {seconds:.1f} s" if seconds else ""), flush=True)
 
-    # which look lands on which frame of this clip's frame rate
-    spans = [(a.start + (FIRST_FLASH + FLASH_STEP * k) / RUN_FPS, a.start + (FIRST_FLASH + FLASH_STEP * k + 1) / RUN_FPS, look) for k, look in enumerate(LOOKS)]
+    # which look lands on which frame: one step on, one step off
+    start_frame = int(np.ceil(a.start * fps - 1e-6))
     look_of = {}
-    for t0, t1, look in spans:
-        for n in range(int(np.ceil(t0 * fps - 1e-6)), max(int(np.ceil(t0 * fps - 1e-6)) + 1, int(np.ceil(t1 * fps - 1e-6)))):
-            look_of[n] = look
+    for k, look in enumerate(LOOKS):
+        for j in range(step):
+            look_of[start_frame + first_flash + 2 * step * k + j] = look
     margin = max(3, int(round(fps / 8)))
     first, last = min(look_of) - margin, max(look_of) + margin
 
@@ -458,7 +458,7 @@ def main():
     count = 0
     for n, fr in enumerate(frames(clip, vf, (W, H))):
         pic = flashes.get(n, fr)
-        z = zoom_at(n / fps - a.start, punch) if punch > 1 else 1.0
+        z = zoom_at((n - start_frame) / fps, punch, first_flash / fps, land_at / fps) if punch > 1 else 1.0
         enc.stdin.write(apply_zoom(pic, z, anchor).tobytes())
         count = n + 1
     enc.stdin.close()
