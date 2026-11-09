@@ -11,6 +11,8 @@ The x-ray flicker you keep seeing on Reels, on your own talking head clip. Free,
 3. **Drag in your talking head clip and press Enter.** Say yes when Claude asks to install the free tools.
 4. **Drop the finished video into your editing timeline.** It's in the `renders` folder.
 
+Or drag the unzipped folder and your clip into a new Claude Code chat together and press Enter. Claude finds the instructions in the folder on its own.
+
 Or skip the download and paste this into Claude Code with your clip:
 
     Clone github.com/corbinsylk/xray-effect, open its CLAUDE.md and put the x-ray effect on this clip.
